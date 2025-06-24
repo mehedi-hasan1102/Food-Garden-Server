@@ -49,15 +49,18 @@ Configure proper MongoDB Atlas IP whitelisting
 Set appropriate CORS origins
 
 ## 📚 API Documentation
-Endpoint	Method	Auth Required	Description
-/jwt	POST	❌	Generate JWT token
-/foods	GET	❌	Get all food items
-/foods	POST	✔️	Add new food item
-/foods/:id	GET	✔️	Get single food item
-/foods/:id	PUT	✔️	Update food item
-/foods/:id	DELETE	✔️	Delete food item
-/foods/notes/:id	POST	✔️	Add note to food item
-🛡️ Security Features
+
+| Endpoint               | Method | Auth Required | Description                     |
+|------------------------|--------|---------------|---------------------------------|
+| `/jwt`                 | POST   | ❌            | Generate JWT token              |
+| `/foods`               | GET    | ❌            | Get all food items              |
+| `/foods`               | POST   | ✔️            | Add new food item               |
+| `/foods/:id`           | GET    | ✔️            | Get single food item            |
+| `/foods/:id`           | PUT    | ✔️            | Update food item                |
+| `/foods/:id`           | DELETE | ✔️            | Delete food item                |
+| `/foods/notes/:id`     | POST   | ✔️            | Add note to food item           |
+
+## 🛡️ Security Features
 HTTP-only cookies with SameSite=None and Secure flags
 
 JWT expiration (2 hours)
