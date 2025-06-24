@@ -30,13 +30,10 @@ FRONTEND_DEV_URL=http://localhost:5173
 ```
 🔐 Authentication Flow
 
-Diagram
-sequenceDiagram
-    Client->>+Server: POST /jwt (with email)
-    Server->>+Client: Sets HTTP-only cookie
-    Client->>+Server: Subsequent requests with cookie
-    Server->>+Client: Verified responses
-🚀 Deployment
+## Diagram
+![alt text](server.png)
+
+## 🚀 Deployment
 Local Development
 ```bash
 pnpm install
@@ -51,7 +48,7 @@ Configure proper MongoDB Atlas IP whitelisting
 
 Set appropriate CORS origins
 
-📚 API Documentation
+## 📚 API Documentation
 Endpoint	Method	Auth Required	Description
 /jwt	POST	❌	Generate JWT token
 /foods	GET	❌	Get all food items
@@ -86,19 +83,6 @@ jsonwebtoken@9.x
 
 cors@2.x
 
-📜 License
+## 📜 License
 ISC Licensed. See LICENSE for full text.
 
-This README includes:
-
-Clear environment variable documentation
-
-Visual authentication flow
-
-API endpoint table
-
-Security highlights
-
-Deployment instructions
-
-Technology badges for visual appeal
