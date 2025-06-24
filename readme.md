@@ -1,12 +1,12 @@
+# 🍔 FoodBD REST API
 
-🍔 FoodBD REST API
-https://img.shields.io/badge/Node.js-18+-339933?logo=node.js
-https://img.shields.io/badge/Express-5.x-000000?logo=express
-https://img.shields.io/badge/MongoDB-6.0+-47A248?logo=mongodb
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-47A248?logo=mongodb&logoColor=white)
 
 A secure REST API for food inventory management with JWT authentication and CRUD operations.
 
-📦 Environment Variables
+ ## 📦 Environment Variables
 Create a .env file in root directory with these variables:
 
 ```env
