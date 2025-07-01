@@ -12,7 +12,7 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: ["https://food-garden-bd.web.app/",'http://localhost:5173'],
+    origin: ["https://food-garden-bd.web.app",'http://localhost:5173'],
     credentials: true,
   })
 );
@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 });
 
 // MongoDB URI (local)
-
+// const uri = "mongodb://localhost:27017/";
 const uri = `mongodb+srv://${process.env.NAME}:${process.env.PASS}@cluster0.onrfrlh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 //middleware
@@ -48,6 +48,14 @@ app.post("/jwt", async (req, res) => {
   });
   res.send({ message: "token sent", status: true });
 });
+
+app.post("/logout", (req, res) => {
+  res.clearCookie("session", {
+    httpOnly: true,
+    path: "/",
+    secure: true,
+    sameSite: "none",
+  })})
 
 const client = new MongoClient(uri, {
   serverApi: {
