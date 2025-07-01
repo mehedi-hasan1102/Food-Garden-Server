@@ -25,7 +25,7 @@ JWT_SECRET=your_strong_secret_here
 JWT_EXPIRES_IN=2h
 
 # CORS Origins
-FRONTEND_PROD_URL=https://foodbd123.netlify.app
+FRONTEND_PROD_URL=https://food-garden-bd.web.app
 FRONTEND_DEV_URL=http://localhost:5173
 ```
 🔐 Authentication Flow
