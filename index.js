@@ -167,7 +167,7 @@ async function run() {
       }
     });
 
-    // POST a new note to a food item  { i wiil add verefi tocken here }
+    // Post a new note to a food item  — requires verify token
     app.post("/foods/notes/:id",  async (req, res) => {
       try {
         const id = req.params.id;
