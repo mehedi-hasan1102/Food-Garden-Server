@@ -99,7 +99,7 @@ async function run() {
       }
     });
 
-    // DELETE food item by ID { i wiil add verefi tocken here }
+    // Delete food item by ID — requires verify token
     app.delete("/foods/:id",verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
