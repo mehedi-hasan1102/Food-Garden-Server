@@ -1,62 +1,109 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-require("dotenv").config();
+const jwt = require("jsonwebtoken");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-const port = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
+const COOKIE_NAME = "token";
 
+// Trust proxy when behind a proxy (Vercel, Heroku, Cloudflare)
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+// --- Middleware ---
+app.use(express.json());
 app.use(cookieParser());
+
+// Configure allowed origins
+const allowedOrigins = [
+  "https://project-web-b11-a11-food-garden-ser.vercel.app",
+  "https://food-garden-bd.web.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
 app.use(
   cors({
-    origin: ["https://food-garden-bd.web.app",'http://localhost:5173'],
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
-app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("Hellow World ! ");
-});
+// --- JWT Handling ---
 
-// MongoDB URI (local)
+/**
+ * To implement refresh tokens, you would typically do the following:
+ * 1. When issuing a token, also issue a long-lived refresh token.
+ * 2. Store the refresh token in your database, associated with the user.
+ * 3. When the access token expires, the client sends the refresh token to a new `/refresh-token` endpoint.
+ * 4. The server verifies the refresh token against the database.
+ * 5. If valid, the server issues a new access token and a new refresh token.
+ * 6. The old refresh token is invalidated.
+ * This approach provides a more secure and seamless user experience.
+ */
 
-const uri = `mongodb+srv://${process.env.NAME}:${process.env.PASS}@cluster0.onrfrlh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+// Cookie options helper
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  path: "/",
+};
 
-//middleware
+// --- JWT verify middleware ---
 const verifyToken = (req, res, next) => {
-  const token = req.cookies.token;
-  if (!token)
-    return res.status(401).json({ message: "Unauthorized, No cookies found" });
+  const token = req.cookies[COOKIE_NAME];
+
+  if (!token) {
+    return res.status(401).json({ ok: false, message: "Unauthorized: No token provided." });
+  }
+
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ message: "Token parsing failed" });
+    if (err) {
+      // Token is expired or invalid
+      return res.status(401).json({ ok: false, message: "Unauthorized: Invalid token." });
+    }
+    req.user = decoded; // Attach user payload to the request
     next();
   });
 };
 
-app.post("/jwt", async (req, res) => {
+// --- Auth endpoints ---
+
+// Issue JWT cookie (login)
+app.post("/jwt", (req, res) => {
   const { email } = req.body;
-  const user = { email };
-  const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "2h" });
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite:'none'
-  });
-  res.send({ message: "token sent", status: true });
+
+  if (!email) {
+    return res.status(400).json({ ok: false, message: "Email is required." });
+  }
+
+  const payload = { email };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "2h" });
+
+  res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 2 * 60 * 60 * 1000 }); // 2 hours
+
+  res.json({ ok: true, message: "Token issued successfully." });
 });
 
+// Logout - clear the JWT cookie
 app.post("/logout", (req, res) => {
-  res.clearCookie("session", {
-    httpOnly: true,
-    path: "/",
-    secure: true,
-    sameSite: "none",
-  })})
+  res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: 0 });
+  res.json({ ok: true, message: "Logged out successfully." });
+});
 
+// --- MongoDB setup ---
+const uri = `mongodb+srv://${process.env.NAME}:${process.env.PASS}@cluster0.onrfrlh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -65,91 +112,75 @@ const client = new MongoClient(uri, {
   },
 });
 
-async function run() {
+async function main() {
   try {
-    // Connect to MongoDB
-    
-    // Reference to the foods collection
-    const foods = client.db("foodsdb").collection("foods");
+    await client.connect();
+    console.log("Connected to MongoDB");
 
-    // Get all food items
+    const db = client.db("foodsdb");
+    const foods = db.collection("foods");
+
+    // --- API Routes ---
+
+    // Public: list all foods
     app.get("/foods", async (req, res) => {
       try {
-        const result = await foods.find().toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch data" });
+        const list = await foods.find().toArray();
+        res.json({ ok: true, data: list });
+      } catch (err) {
+        console.error("GET /foods error:", err);
+        res.status(500).json({ ok: false, message: "Failed to fetch foods." });
       }
     });
 
-    // Add new food item — requires verify token
-
-    app.post("/foods",verifyToken, async (req, res) => {
+    // Protected: add food
+    app.post("/foods", verifyToken, async (req, res) => {
       try {
-        const newFood = req.body;
+        const newFood = { ...req.body, userEmail: req.user.email, addedAt: new Date().toISOString() };
         const result = await foods.insertOne(newFood);
-        res.send({
-          success: true,
-          message: "Food item added successfully!",
-          data: result,
-        });
-      } catch (error) {
-        res.status(500).send({ error: "Failed to add food item" });
+        res.status(201).json({ ok: true, message: "Food added successfully.", data: result });
+      } catch (err) {
+        console.error("POST /foods error:", err);
+        res.status(500).json({ ok: false, message: "Failed to add food." });
       }
     });
 
-    // Delete food item by ID — requires verify token
-    app.delete("/foods/:id",verifyToken, async (req, res) => {
+    // Protected: delete food
+    app.delete("/foods/:id", verifyToken, async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await foods.deleteOne(query);
+        const { id } = req.params;
+        const result = await foods.deleteOne({ _id: new ObjectId(id) });
 
         if (result.deletedCount === 1) {
-          res.send({
-            success: true,
-            message: "Food item deleted successfully!",
-          });
+          res.json({ ok: true, message: "Food deleted successfully." });
         } else {
-          res.status(404).send({
-            success: false,
-            message: "Food item not found",
-          });
+          res.status(404).json({ ok: false, message: "Food not found." });
         }
-      } catch (error) {
-        res.status(500).send({ error: "Failed to delete food item" });
+      } catch (err) {
+        console.error("DELETE /foods/:id error:", err);
+        res.status(500).json({ ok: false, message: "Failed to delete food." });
       }
     });
 
-    // UPDATE food item by ID 
-    app.put("/foods/:id",verifyToken, async (req, res) => {
+    // Protected: update food
+    app.put("/foods/:id", verifyToken, async (req, res) => {
       try {
-        const id = req.params.id;
+        const { id } = req.params;
         const updatedData = req.body;
-
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = {
-          $set: updatedData,
-        };
-
-        const result = await foods.updateOne(filter, updateDoc);
+        const result = await foods.updateOne({ _id: new ObjectId(id) }, { $set: updatedData });
 
         if (result.modifiedCount === 1) {
-          res.send({
-            success: true,
-            message: "Food item updated successfully!",
-          });
+            const updatedFood = await foods.findOne({ _id: new ObjectId(id) });
+          res.json({ ok: true, message: "Food updated successfully.", data: updatedFood });
         } else {
-          res.status(404).send({
-            success: false,
-            message: "Food item not found or data is the same",
-          });
+          res.status(404).json({ ok: false, message: "Food not found or no changes made." });
         }
-      } catch (error) {
-        res.status(500).send({ error: "Failed to update food item" });
+      } catch (err) {
+        console.error("PUT /foods/:id error:", err);
+        res.status(500).json({ ok: false, message: "Failed to update food." });
       }
     });
-
+    
     // GET single food item by ID
     app.get("/foods/:id", async (req, res) => {
       try {
@@ -166,40 +197,43 @@ async function run() {
       }
     });
 
-    // Post a new note to a food item  — requires verify token
-    app.post("/foods/notes/:id",  async (req, res) => {
+    // Protected: Post a new note to a food item
+    app.post("/foods/notes/:id", verifyToken, async (req, res) => {
       try {
-        const id = req.params.id;
-        console.log(id);
-        const { note, postedBy, postedAt } = req.body;
+        const { id } = req.params;
+        const { note } = req.body;
+        const newNote = {
+          note,
+          postedBy: req.user.email,
+          postedAt: new Date().toISOString(),
+        };
 
-        const newNote = { note, postedBy, postedAt };
-        
-        const result = await foods.updateOne(
-          { _id: new ObjectId(id) },
-          { $push: { notes: newNote } }
-        );
+        const result = await foods.updateOne({ _id: new ObjectId(id) }, { $push: { notes: newNote } });
 
         if (result.modifiedCount === 1) {
-          res.send(newNote);
+          res.status(201).json({ ok: true, message: "Note added successfully.", data: newNote });
         } else {
-          res.status(404).send({ error: "Food item not found" });
+          res.status(404).json({ ok: false, message: "Food not found." });
         }
-      } catch (error) {
-        res.status(500).send({ error: "Failed to add note" });
+      } catch (err) {
+        console.error("POST /foods/notes/:id error:", err);
+        res.status(500).json({ ok: false, message: "Failed to add note." });
       }
     });
 
-    // Confirm DB connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Connected to MongoDB 😍");
-  } catch (error) {
-    console.error("MongoDB connection error: 😭", error);
+    // --- Server Health Check ---
+    app.get("/", (req, res) => {
+      res.json({ ok: true, message: "Server is running." });
+    });
+
+  } catch (err) {
+    console.error("MongoDB connection failed:", err);
+    process.exit(1);
   }
 }
 
-run().catch(console.dir);
+main().catch(console.error);
 
-app.listen(port, () => {
-  console.log(` Server running at http://localhost:${port} 👌`);
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
