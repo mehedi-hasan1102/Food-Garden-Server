@@ -175,7 +175,7 @@ async function run() {
         const { note, postedBy, postedAt } = req.body;
 
         const newNote = { note, postedBy, postedAt };
-        // const result = await foods.insertOne(newFood);
+        
         const result = await foods.updateOne(
           { _id: new ObjectId(id) },
           { $push: { notes: newNote } }
