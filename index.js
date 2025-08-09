@@ -83,7 +83,8 @@ async function run() {
       }
     });
 
-    // Add new food item { i wiil add verefi tocken here }
+    // Add new food item — requires verify token
+
     app.post("/foods",verifyToken, async (req, res) => {
       try {
         const newFood = req.body;
