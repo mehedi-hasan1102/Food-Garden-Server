@@ -20,7 +20,7 @@ app.use(cookieParser());
 
 // Configure allowed origins
 const allowedOrigins = [
-  "https://project-web-b11-a11-food-garden-ser.vercel.app",
+  "https://food-garden-server-bd.vercel.app",
   "https://food-garden-bd.web.app",
   "http://localhost:5173",
   "http://localhost:3000",
