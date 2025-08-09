@@ -151,7 +151,7 @@ async function run() {
     });
 
     // GET single food item by ID
-    app.get("/foods/:id",verifyToken, async (req, res) => {
+    app.get("/foods/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const food = await foods.findOne({ _id: new ObjectId(id) });
