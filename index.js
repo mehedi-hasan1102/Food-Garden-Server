@@ -67,9 +67,8 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    // Connect to MongoDB
     
-    // await client.connect();
-
     // Reference to the foods collection
     const foods = client.db("foodsdb").collection("foods");
 
