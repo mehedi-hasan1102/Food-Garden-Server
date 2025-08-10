@@ -5,6 +5,11 @@ const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL ERROR: JWT_SECRET is not defined.");
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const COOKIE_NAME = "token";
@@ -32,6 +37,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         cb(null, true);
       } else {
+        console.error("CORS Error: Origin not allowed:", origin);
         cb(new Error("Not allowed by CORS"));
       }
     },
@@ -62,14 +68,19 @@ const cookieOptions = {
 
 // --- JWT verify middleware ---
 const verifyToken = (req, res, next) => {
-  const token = req.cookies[COOKIE_NAME];
+  const authHeader = req.headers.authorization;
+  console.log("authHeader:", authHeader);
 
-  if (!token) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ ok: false, message: "Unauthorized: No token provided." });
   }
 
+  const token = authHeader.split(' ')[1];
+  console.log("token:", token);
+
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
+      console.error("JWT verification error:", err);
       // Token is expired or invalid
       return res.status(401).json({ ok: false, message: "Unauthorized: Invalid token." });
     }
