@@ -119,22 +119,69 @@ app.post("/logout", (req, res) => {
 });
 
 // --- MongoDB setup ---
-const uri = `mongodb+srv://${process.env.NAME}:${process.env.PASS}@cluster0.onrfrlh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
+const DB_USER = process.env.DB_USER || process.env.NAME;
+const DB_PASS = process.env.DB_PASS || process.env.PASS;
+const DB_NAME = process.env.DB_NAME || "foodsdb";
+const DB_CLUSTER = process.env.DB_CLUSTER || "cluster0.onrfrlh.mongodb.net";
+
+const uri = DB_USER && DB_PASS
+  ? `mongodb+srv://${DB_USER}:${DB_PASS}@${DB_CLUSTER}/?retryWrites=true&w=majority&appName=Cluster0`
+  : null;
+
+const client = uri
+  ? new MongoClient(uri, {
+    serverApi: {
+      version: ServerApiVersion.v1,
+      strict: true,
+      deprecationErrors: true,
+    },
+  })
+  : null;
 
 let foods;
+let dbReady = false;
+let dbInitInFlight = null;
 
-const requireDb = (req, res, next) => {
-  if (!foods) {
-    return res.status(503).json({ ok: false, message: "Database not ready. Try again." });
+const initDb = async () => {
+  if (dbReady && foods) {
+    return;
   }
-  next();
+
+  if (dbInitInFlight) {
+    await dbInitInFlight;
+    return;
+  }
+
+  if (!client) {
+    throw new Error("Missing MongoDB credentials. Set DB_USER and DB_PASS.");
+  }
+
+  dbInitInFlight = (async () => {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    foods = db.collection("foods");
+    dbReady = true;
+    console.log("Connected to MongoDB");
+  })();
+
+  try {
+    await dbInitInFlight;
+  } finally {
+    dbInitInFlight = null;
+  }
+};
+
+const requireDb = async (req, res, next) => {
+  try {
+    await initDb();
+    if (!foods) {
+      return res.status(503).json({ ok: false, message: "Database not ready. Try again." });
+    }
+    next();
+  } catch (err) {
+    console.error("MongoDB connection failed:", err);
+    res.status(503).json({ ok: false, message: "Database not ready. Try again." });
+  }
 };
 
 // --- API Routes ---
@@ -238,21 +285,9 @@ app.post("/foods/notes/:id", verifyToken, requireDb, async (req, res) => {
   }
 });
 
-async function main() {
-  try {
-    await client.connect();
-    console.log("Connected to MongoDB");
-
-    const db = client.db("foodsdb");
-    foods = db.collection("foods");
-
-  } catch (err) {
-    console.error("MongoDB connection failed:", err);
-    process.exit(1);
-  }
-}
-
-main().catch(console.error);
+initDb().catch((err) => {
+  console.error("MongoDB connection failed:", err);
+});
 
 if (process.env.VERCEL !== "1") {
   app.listen(PORT, () => {
