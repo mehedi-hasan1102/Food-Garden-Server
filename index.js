@@ -123,114 +123,123 @@ const client = new MongoClient(uri, {
   },
 });
 
+let foods;
+
+const requireDb = (req, res, next) => {
+  if (!foods) {
+    return res.status(503).json({ ok: false, message: "Database not ready. Try again." });
+  }
+  next();
+};
+
+// --- API Routes ---
+
+// Public: list all foods
+app.get("/foods", requireDb, async (req, res) => {
+  try {
+    const list = await foods.find().toArray();
+    res.json({ ok: true, data: list });
+  } catch (err) {
+    console.error("GET /foods error:", err);
+    res.status(500).json({ ok: false, message: "Failed to fetch foods." });
+  }
+});
+
+// Protected: add food
+app.post("/foods", verifyToken, requireDb, async (req, res) => {
+  try {
+    const newFood = { ...req.body, userEmail: req.user.email, addedAt: new Date().toISOString() };
+    const result = await foods.insertOne(newFood);
+    res.status(201).json({ ok: true, message: "Food added successfully.", data: result });
+  } catch (err) {
+    console.error("POST /foods error:", err);
+    res.status(500).json({ ok: false, message: "Failed to add food." });
+  }
+});
+
+// Protected: delete food
+app.delete("/foods/:id", verifyToken, requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await foods.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 1) {
+      res.json({ ok: true, message: "Food deleted successfully." });
+    } else {
+      res.status(404).json({ ok: false, message: "Food not found." });
+    }
+  } catch (err) {
+    console.error("DELETE /foods/:id error:", err);
+    res.status(500).json({ ok: false, message: "Failed to delete food." });
+  }
+});
+
+// Protected: update food
+app.put("/foods/:id", verifyToken, requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedData = req.body;
+    const result = await foods.updateOne({ _id: new ObjectId(id) }, { $set: updatedData });
+
+    if (result.modifiedCount === 1) {
+      const updatedFood = await foods.findOne({ _id: new ObjectId(id) });
+      res.json({ ok: true, message: "Food updated successfully.", data: updatedFood });
+    } else {
+      res.status(404).json({ ok: false, message: "Food not found or no changes made." });
+    }
+  } catch (err) {
+    console.error("PUT /foods/:id error:", err);
+    res.status(500).json({ ok: false, message: "Failed to update food." });
+  }
+});
+
+// GET single food item by ID
+app.get("/foods/:id", requireDb, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const food = await foods.findOne({ _id: new ObjectId(id) });
+
+    if (!food) {
+      return res.status(404).send({ error: "Food not found" });
+    }
+
+    res.send(food);
+  } catch (error) {
+    res.status(500).send({ error: "Failed to fetch food" });
+  }
+});
+
+// Protected: Post a new note to a food item
+app.post("/foods/notes/:id", verifyToken, requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const newNote = {
+      note,
+      postedBy: req.user.email,
+      postedAt: new Date().toISOString(),
+    };
+
+    const result = await foods.updateOne({ _id: new ObjectId(id) }, { $push: { notes: newNote } });
+
+    if (result.modifiedCount === 1) {
+      res.status(201).json({ ok: true, message: "Note added successfully.", data: newNote });
+    } else {
+      res.status(404).json({ ok: false, message: "Food not found." });
+    }
+  } catch (err) {
+    console.error("POST /foods/notes/:id error:", err);
+    res.status(500).json({ ok: false, message: "Failed to add note." });
+  }
+});
+
 async function main() {
   try {
     await client.connect();
     console.log("Connected to MongoDB");
 
     const db = client.db("foodsdb");
-    const foods = db.collection("foods");
-
-    // --- API Routes ---
-
-    // Public: list all foods
-    app.get("/foods", async (req, res) => {
-      try {
-        const list = await foods.find().toArray();
-        res.json({ ok: true, data: list });
-      } catch (err) {
-        console.error("GET /foods error:", err);
-        res.status(500).json({ ok: false, message: "Failed to fetch foods." });
-      }
-    });
-
-    // Protected: add food
-    app.post("/foods", verifyToken, async (req, res) => {
-      try {
-        const newFood = { ...req.body, userEmail: req.user.email, addedAt: new Date().toISOString() };
-        const result = await foods.insertOne(newFood);
-        res.status(201).json({ ok: true, message: "Food added successfully.", data: result });
-      } catch (err) {
-        console.error("POST /foods error:", err);
-        res.status(500).json({ ok: false, message: "Failed to add food." });
-      }
-    });
-
-    // Protected: delete food
-    app.delete("/foods/:id", verifyToken, async (req, res) => {
-      try {
-        const { id } = req.params;
-        const result = await foods.deleteOne({ _id: new ObjectId(id) });
-
-        if (result.deletedCount === 1) {
-          res.json({ ok: true, message: "Food deleted successfully." });
-        } else {
-          res.status(404).json({ ok: false, message: "Food not found." });
-        }
-      } catch (err) {
-        console.error("DELETE /foods/:id error:", err);
-        res.status(500).json({ ok: false, message: "Failed to delete food." });
-      }
-    });
-
-    // Protected: update food
-    app.put("/foods/:id", verifyToken, async (req, res) => {
-      try {
-        const { id } = req.params;
-        const updatedData = req.body;
-        const result = await foods.updateOne({ _id: new ObjectId(id) }, { $set: updatedData });
-
-        if (result.modifiedCount === 1) {
-            const updatedFood = await foods.findOne({ _id: new ObjectId(id) });
-          res.json({ ok: true, message: "Food updated successfully.", data: updatedFood });
-        } else {
-          res.status(404).json({ ok: false, message: "Food not found or no changes made." });
-        }
-      } catch (err) {
-        console.error("PUT /foods/:id error:", err);
-        res.status(500).json({ ok: false, message: "Failed to update food." });
-      }
-    });
-    
-    // GET single food item by ID
-    app.get("/foods/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const food = await foods.findOne({ _id: new ObjectId(id) });
-
-        if (!food) {
-          return res.status(404).send({ error: "Food not found" });
-        }
-
-        res.send(food);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch food" });
-      }
-    });
-
-    // Protected: Post a new note to a food item
-    app.post("/foods/notes/:id", verifyToken, async (req, res) => {
-      try {
-        const { id } = req.params;
-        const { note } = req.body;
-        const newNote = {
-          note,
-          postedBy: req.user.email,
-          postedAt: new Date().toISOString(),
-        };
-
-        const result = await foods.updateOne({ _id: new ObjectId(id) }, { $push: { notes: newNote } });
-
-        if (result.modifiedCount === 1) {
-          res.status(201).json({ ok: true, message: "Note added successfully.", data: newNote });
-        } else {
-          res.status(404).json({ ok: false, message: "Food not found." });
-        }
-      } catch (err) {
-        console.error("POST /foods/notes/:id error:", err);
-        res.status(500).json({ ok: false, message: "Failed to add note." });
-      }
-    });
+    foods = db.collection("foods");
 
     // --- Server Health Check ---
     app.get("/", (req, res) => {
