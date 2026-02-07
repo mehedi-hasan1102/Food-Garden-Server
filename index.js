@@ -23,6 +23,11 @@ if (process.env.NODE_ENV === "production") {
 app.use(express.json());
 app.use(cookieParser());
 
+// --- Server Health Check ---
+app.get("/", (req, res) => {
+  res.json({ ok: true, message: "Server is running." });
+});
+
 // Configure allowed origins
 const allowedOrigins = [
   "https://food-garden-server-bd.vercel.app",
@@ -241,11 +246,6 @@ async function main() {
     const db = client.db("foodsdb");
     foods = db.collection("foods");
 
-    // --- Server Health Check ---
-    app.get("/", (req, res) => {
-      res.json({ ok: true, message: "Server is running." });
-    });
-
   } catch (err) {
     console.error("MongoDB connection failed:", err);
     process.exit(1);
@@ -254,6 +254,10 @@ async function main() {
 
 main().catch(console.error);
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
